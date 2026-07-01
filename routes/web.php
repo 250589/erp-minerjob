@@ -15,6 +15,8 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TransferOrderController;
 use App\Http\Controllers\WarehouseReceptionController;
 use App\Http\Controllers\DeliveryNoteController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\RoleController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -113,6 +115,14 @@ Route::middleware('auth')->group(function () {
         ->only(['index', 'create', 'store', 'show']);
     Route::patch('deliveries/{delivery}/deliver',
         [DeliveryNoteController::class, 'deliver'])->name('deliveries.deliver');
+
+    // MÓDULO 12: Usuarios y Roles (solo Administrador)
+    Route::middleware('role:Administrador')->group(function () {
+        Route::resource('users', UserController::class)
+            ->except(['show']);
+        Route::get('roles', [RoleController::class, 'index'])
+            ->name('roles.index');
+    });
 });
 
 require __DIR__.'/auth.php';
