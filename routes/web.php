@@ -14,6 +14,7 @@ use App\Http\Controllers\StockController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TransferOrderController;
 use App\Http\Controllers\WarehouseReceptionController;
+use App\Http\Controllers\DeliveryNoteController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -106,6 +107,12 @@ Route::middleware('auth')->group(function () {
         [TransferOrderController::class, 'dispatch'])->name('transfers.dispatch');
     Route::post('transfers/{transfer}/receive',
         [TransferOrderController::class, 'receive'])->name('transfers.receive');
+
+    // MÓDULO 11: Entregas al Personal
+    Route::resource('deliveries', DeliveryNoteController::class)
+        ->only(['index', 'create', 'store', 'show']);
+    Route::patch('deliveries/{delivery}/deliver',
+        [DeliveryNoteController::class, 'deliver'])->name('deliveries.deliver');
 });
 
 require __DIR__.'/auth.php';
