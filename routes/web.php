@@ -17,6 +17,8 @@ use App\Http\Controllers\WarehouseReceptionController;
 use App\Http\Controllers\DeliveryNoteController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\WarehouseController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -123,6 +125,10 @@ Route::middleware('auth')->group(function () {
         Route::get('roles', [RoleController::class, 'index'])
             ->name('roles.index');
     });
+    
+    // Dentro del grupo middleware('auth'):
+    Route::resource('products',   ProductController::class)->except(['show']);
+    Route::resource('warehouses', WarehouseController::class)->except(['show']);
 });
 
 require __DIR__.'/auth.php';

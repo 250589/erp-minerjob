@@ -1,0 +1,125 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue'
+export default { layout: AppLayout }
+</script>
+<script setup>
+import { useForm } from '@inertiajs/vue3'
+
+defineProps({ categories: Array, units: Array })
+
+const form = useForm({
+  category_id:       null,
+  unit_id:           null,
+  sku:               '',
+  name:              '',
+  description:       '',
+  min_stock:         0,
+  max_stock:         null,
+  markup_percentage: 35,
+  status:            'activo',
+})
+
+function submit() { form.post('/products') }
+</script>
+
+<template>
+  <div>
+    <div class="d-flex align-center mb-6">
+      <v-btn icon="mdi-arrow-left" variant="text" href="/products" class="mr-2" />
+      <div>
+        <h1 class="text-h5 font-weight-bold">Nuevo Producto</h1>
+        <p class="text-body-2 text-medium-emphasis">Agregar al catálogo</p>
+      </div>
+    </div>
+
+    <v-form @submit.prevent="submit">
+      <v-row justify="center">
+        <v-col cols="12" md="8">
+          <v-card variant="outlined" rounded="lg">
+            <v-card-title class="pa-4 pb-3 text-subtitle-1 font-weight-bold">
+              <v-icon start color="primary">mdi-package-variant</v-icon>
+              Datos del Producto
+            </v-card-title>
+            <v-divider />
+            <v-card-text class="pt-4">
+              <v-row>
+                <v-col cols="12" md="4">
+                  <v-text-field v-model="form.sku" label="SKU / Código *"
+                    variant="outlined" density="compact"
+                    :error-messages="form.errors.sku" />
+                </v-col>
+                <v-col cols="12" md="8">
+                  <v-text-field v-model="form.name" label="Nombre del Producto *"
+                    variant="outlined" density="compact"
+                    :error-messages="form.errors.name" />
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-select v-model="form.category_id" :items="categories"
+                    item-title="name" item-value="id"
+                    label="Categoría" variant="outlined" density="compact"
+                    clearable :error-messages="form.errors.category_id" />
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-select v-model="form.unit_id" :items="units"
+                    item-value="id" label="Unidad de Medida *"
+                    variant="outlined" density="compact"
+                    :error-messages="form.errors.unit_id">
+                    <template #item="{ item, props: p }">
+                      <v-list-item v-bind="p">
+                        <template #title>{{ item.raw.name }}</template>
+                        <template #subtitle>{{ item.raw.abbreviation }}</template>
+                      </v-list-item>
+                    </template>
+                    <template #selection="{ item }">
+                      {{ item.raw.name }} ({{ item.raw.abbreviation }})
+                    </template>
+                  </v-select>
+                </v-col>
+                <v-col cols="12">
+                  <v-textarea v-model="form.description" label="Descripción"
+                    variant="outlined" density="compact" rows="2" />
+                </v-col>
+
+                <v-col cols="12"><v-divider /><p class="text-caption text-medium-emphasis mt-2 mb-1">Precios e Inventario</p></v-col>
+
+                <v-col cols="12" md="4">
+                  <v-text-field v-model.number="form.markup_percentage"
+                    label="Margen de Ganancia % *" type="number" min="0" step="1"
+                    suffix="%" variant="outlined" density="compact"
+                    :error-messages="form.errors.markup_percentage" />
+                </v-col>
+                <v-col cols="12" md="4">
+                  <v-text-field v-model.number="form.min_stock"
+                    label="Stock Mínimo" type="number" min="0" step="1"
+                    variant="outlined" density="compact"
+                    :error-messages="form.errors.min_stock" />
+                </v-col>
+                <v-col cols="12" md="4">
+                  <v-text-field v-model.number="form.max_stock"
+                    label="Stock Máximo" type="number" min="0" step="1"
+                    variant="outlined" density="compact" clearable
+                    :error-messages="form.errors.max_stock" />
+                </v-col>
+                <v-col cols="12" md="4">
+                  <v-select v-model="form.status"
+                    :items="[{title:'Activo',value:'activo'},{title:'Inactivo',value:'inactivo'}]"
+                    label="Estado" variant="outlined" density="compact"
+                    :error-messages="form.errors.status" />
+                </v-col>
+              </v-row>
+            </v-card-text>
+            <v-divider />
+            <v-card-actions class="pa-4 ga-2">
+              <v-spacer />
+              <v-btn variant="tonal" href="/products" :disabled="form.processing">Cancelar</v-btn>
+              <v-btn type="submit" color="primary" :loading="form.processing"
+                prepend-icon="mdi-content-save">
+                Guardar Producto
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-col>
+      </v-row>
+    </v-form>
+  </div>
+</template>
