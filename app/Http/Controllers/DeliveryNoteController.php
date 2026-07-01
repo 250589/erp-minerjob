@@ -138,6 +138,8 @@ class DeliveryNoteController extends Controller
                     ->value('average_cost') ?? 0;
 
                 // Paso 40: Salida del kardex del subalmacén
+                $areaName = $delivery->area?->name ?? 'Personal';
+
                 $this->kardex->record(
                     warehouse:    $warehouse,
                     product:      $item->product,
@@ -145,7 +147,7 @@ class DeliveryNoteController extends Controller
                     reference:    $delivery,
                     quantity:     (float) $item->quantity_requested,
                     unitCost:     (float) $unitCost,
-                    notes:        "Entrega {$delivery->code} → {$delivery->area?->name ?? 'Personal'}",
+                    notes:        "Entrega {$delivery->code} → {$areaName}",
                     userId:       auth()->id(),
                 );
 
