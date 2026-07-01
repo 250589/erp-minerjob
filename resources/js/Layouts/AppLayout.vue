@@ -42,7 +42,7 @@ const navGroups = [
     heading: 'Operaciones',
     items: [
       { title: 'Requerimientos',   icon: 'mdi-clipboard-list-outline', href: '/requirements' },
-      { title: 'Cotizaciones',     icon: 'mdi-file-compare',          href: '/quotes' },
+      { title: 'Cotizaciones',     icon: 'mdi-file-compare',          href: '/quote-requests' },
       { title: 'Órdenes de Compra',icon: 'mdi-cart-outline',          href: '/purchase-orders' },
     ],
   },
@@ -62,7 +62,7 @@ const navGroups = [
   {
     heading: 'Almacén',
     items: [
-      { title: 'Recepciones',      icon: 'mdi-warehouse',             href: '/receptions' },
+      { title: 'Recepciones',      icon: 'mdi-warehouse',             href: '/warehouse-receptions' },
       { title: 'Stock',            icon: 'mdi-package-variant-closed', href: '/stock' },
       { title: 'Traslados',        icon: 'mdi-transfer',              href: '/transfers' },
       { title: 'Entregas',         icon: 'mdi-truck-delivery-outline', href: '/deliveries' },
