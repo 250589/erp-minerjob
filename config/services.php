@@ -34,5 +34,9 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    
+    'apiperu' => [
+        'token' => env('APIPERU_TOKEN'),
+    ],
 
 ];

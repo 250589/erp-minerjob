@@ -18,53 +18,66 @@ const quotes  = computed(() => qr.value.quotes ?? [])
 const reqItems = computed(() => qr.value.requirement?.items ?? [])
 
 // ─── Comparativo automático (Paso 5) ─────────────────────────────────────────
-// Construye la matriz: filas = ítems del requerimiento, columnas = cotizaciones
+// Toda la comparación se hace en PEN.
+// Los precios en moneda extranjera se convierten: precio × exchange_rate.
+
 const comparisonMatrix = computed(() => {
   const activeQuotes = quotes.value.filter(q => q.status !== 'rechazada')
   if (!activeQuotes.length || !reqItems.value.length) return []
 
   return reqItems.value.map((reqItem) => {
     const prices = activeQuotes.map((quote) => {
-      const qItem = quote.items.find(i => i.requirement_item_id === reqItem.id)
+      const exchangeRate = Number(quote.exchange_rate ?? 1)
+      const qItem        = quote.items.find(i => i.requirement_item_id === reqItem.id)
+      const unitPrice    = qItem ? Number(qItem.unit_price) : null
+      const unitPricePen = unitPrice !== null ? unitPrice * exchangeRate : null
+
       return {
-        quote_id:    quote.id,
-        unit_price:  qItem ? Number(qItem.unit_price) : null,
-        subtotal:    qItem ? Number(qItem.subtotal)   : null,
+        quote_id:       quote.id,
+        currency:       quote.currency,
+        exchange_rate:  exchangeRate,
+        unit_price:     unitPrice,
+        unit_price_pen: unitPricePen,   // ← para comparar
+        subtotal:       qItem ? Number(qItem.subtotal) : null,
       }
     })
 
-    const validPrices  = prices.filter(p => p.unit_price !== null).map(p => p.unit_price)
-    const minUnitPrice = validPrices.length ? Math.min(...validPrices) : null
+    // El mejor precio se determina en PEN
+    const validPen    = prices.filter(p => p.unit_price_pen !== null).map(p => p.unit_price_pen)
+    const minPricePen = validPen.length ? Math.min(...validPen) : null
 
     return {
       ...reqItem,
       prices: prices.map(p => ({
         ...p,
-        is_best: p.unit_price !== null && p.unit_price === minUnitPrice,
+        is_best: p.unit_price_pen !== null && p.unit_price_pen === minPricePen,
       })),
     }
   })
 })
 
-// Totales por cotización para el resumen inferior del comparativo
+// Totales en PEN para comparar quién tiene el menor total
 const quoteTotals = computed(() => {
   const activeQuotes = quotes.value.filter(q => q.status !== 'rechazada')
   return activeQuotes.map(q => ({
-    quote_id:            q.id,
-    supplier_name:       q.supplier?.business_name,
-    currency:            q.currency,
-    total:               Number(q.total),
-    payment_term_days:   q.payment_term_days,
-    delivery_term_days:  q.delivery_term_days,
-    validity_date:       q.validity_date,
-    status:              q.status,
-    status_color:        q.status_color,
-    status_label:        q.status_label,
+    quote_id:           q.id,
+    supplier_name:      q.supplier?.business_name,
+    currency:           q.currency,
+    exchange_rate:      Number(q.exchange_rate ?? 1),
+    total:              Number(q.total),
+    total_pen:          Number(q.total) * Number(q.exchange_rate ?? 1), // ← PEN
+    payment_term_days:  q.payment_term_days,
+    delivery_term_days: q.delivery_term_days,
+    validity_date:      q.validity_date,
+    status:             q.status,
+    status_color:       q.status_color,
+    status_label:       q.status_label,
   }))
 })
 
+// El menor total también se compara en PEN
 const minTotal = computed(() => {
-  const totals = quoteTotals.value.map(q => q.total).filter(Boolean)
+  const totals = quoteTotals.value.map(q => q.total_pen).filter(Boolean)
   return totals.length ? Math.min(...totals) : null
 })
 
@@ -85,31 +98,24 @@ function closeRequest() {
   }
 }
 
-function currency(value) {
-  return value !== null && value !== undefined
-    ? `S/ ${Number(value).toFixed(2)}`
-    : '—'
-}
-
-// Headers tabla solicitud - proveedores
+// Headers
 const supplierHeaders = [
   { title: 'Proveedor',  key: 'supplier.business_name' },
-  { title: 'RUC',        key: 'supplier.tax_id',   width: '130px' },
-  { title: 'Enviado',    key: 'sent_at',            width: '140px' },
-  { title: 'Respondió',  key: 'responded_at',       width: '140px' },
-  { title: 'Estado',     key: 'status',             width: '120px' },
+  { title: 'RUC',        key: 'supplier.tax_id',    width: '130px' },
+  { title: 'Enviado',    key: 'sent_at',             width: '140px' },
+  { title: 'Respondió',  key: 'responded_at',        width: '140px' },
+  { title: 'Estado',     key: 'status',              width: '120px' },
 ]
 
-// Headers tabla cotizaciones recibidas
 const quoteHeaders = [
-  { title: 'Proveedor',     key: 'supplier.business_name' },
-  { title: 'N° Cotización', key: 'code',              width: '130px' },
-  { title: 'Moneda',        key: 'currency',          width: '90px' },
-  { title: 'Total',         key: 'total',             width: '120px', align: 'end' },
-  { title: 'Pago (días)',   key: 'payment_term_days', width: '110px', align: 'center' },
-  { title: 'Entrega (días)',key: 'delivery_term_days',width: '120px', align: 'center' },
-  { title: 'Estado',        key: 'status',            width: '120px' },
-  { title: 'Acción',        key: 'actions',           width: '80px', sortable: false },
+  { title: 'Proveedor',      key: 'supplier.business_name' },
+  { title: 'N° Cotización',  key: 'code',               width: '130px' },
+  { title: 'Moneda',         key: 'currency',            width: '90px' },
+  { title: 'Total',          key: 'total',               width: '140px', align: 'end' },
+  { title: 'Pago (días)',    key: 'payment_term_days',   width: '110px', align: 'center' },
+  { title: 'Entrega (días)', key: 'delivery_term_days',  width: '120px', align: 'center' },
+  { title: 'Estado',         key: 'status',              width: '120px' },
+  { title: 'Acción',         key: 'actions',             width: '80px', sortable: false },
 ]
 
 const supplierStatusColors = { pendiente: 'warning', respondido: 'success', declinado: 'error' }
@@ -136,20 +142,13 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
         </div>
       </div>
       <div class="d-flex ga-2">
-        <v-btn
-          v-if="qr.status === 'abierta'"
-          variant="tonal" color="primary"
+        <v-btn v-if="qr.status === 'abierta'" variant="tonal" color="primary"
           prepend-icon="mdi-file-plus"
-          :href="`/quote-requests/${qr.id}/quotes/create`"
-        >
+          :href="`/quote-requests/${qr.id}/quotes/create`">
           Registrar Cotización
         </v-btn>
-        <v-btn
-          v-if="qr.status === 'abierta'"
-          variant="tonal" color="error"
-          prepend-icon="mdi-close"
-          @click="closeRequest"
-        >
+        <v-btn v-if="qr.status === 'abierta'" variant="tonal" color="error"
+          prepend-icon="mdi-close" @click="closeRequest">
           Cerrar Sin Ganador
         </v-btn>
       </div>
@@ -158,25 +157,20 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
     <!-- Tabs -->
     <v-card variant="outlined" rounded="lg">
       <v-tabs v-model="activeTab" color="primary">
-        <v-tab value="solicitud" prepend-icon="mdi-clipboard-text">
-          Solicitud
-        </v-tab>
+        <v-tab value="solicitud"    prepend-icon="mdi-clipboard-text">Solicitud</v-tab>
         <v-tab value="cotizaciones" prepend-icon="mdi-file-multiple">
           Cotizaciones
           <v-chip size="x-small" color="primary" class="ml-1">{{ quotes.length }}</v-chip>
         </v-tab>
-        <v-tab value="comparativo" prepend-icon="mdi-table-eye">
-          Comparativo
-        </v-tab>
+        <v-tab value="comparativo"  prepend-icon="mdi-table-eye">Comparativo</v-tab>
       </v-tabs>
       <v-divider />
 
       <v-tabs-window v-model="activeTab">
 
-        <!-- ─── Tab 1: Solicitud y Proveedores ─────────────── -->
+        <!-- ─── Tab 1: Solicitud ─────────────────────────────── -->
         <v-tabs-window-item value="solicitud">
           <v-card-text>
-            <!-- Info básica -->
             <v-row class="mb-4">
               <v-col cols="6" md="3">
                 <div class="text-caption text-medium-emphasis">Código</div>
@@ -196,21 +190,17 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
               </v-col>
             </v-row>
 
-            <!-- Justificación del requerimiento -->
             <v-alert v-if="qr.requirement?.justification"
               type="info" variant="tonal" density="compact" class="mb-4">
               <strong>Justificación:</strong> {{ qr.requirement.justification }}
             </v-alert>
 
-            <!-- Ítems del requerimiento -->
             <h3 class="text-subtitle-2 font-weight-bold mb-2">Ítems solicitados</h3>
             <v-table density="compact" class="mb-4">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Descripción</th>
-                  <th class="text-right">Cantidad</th>
-                  <th>Unidad</th>
+                  <th>#</th><th>Descripción</th>
+                  <th class="text-right">Cantidad</th><th>Unidad</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,7 +213,6 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
               </tbody>
             </v-table>
 
-            <!-- Proveedores invitados -->
             <h3 class="text-subtitle-2 font-weight-bold mb-2">Proveedores invitados</h3>
             <v-data-table :headers="supplierHeaders" :items="qr.suppliers"
               hide-default-footer density="compact">
@@ -242,7 +231,7 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
           </v-card-text>
         </v-tabs-window-item>
 
-        <!-- ─── Tab 2: Cotizaciones Recibidas (Paso 4) ──────── -->
+        <!-- ─── Tab 2: Cotizaciones Recibidas ────────────────── -->
         <v-tabs-window-item value="cotizaciones">
           <v-card-text>
             <div v-if="quotes.length === 0" class="text-center pa-8">
@@ -259,9 +248,16 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
               hide-default-footer density="comfortable">
 
               <template #item.total="{ item }">
-                <span class="font-weight-medium">
-                  {{ item.currency }} {{ Number(item.total).toFixed(2) }}
-                </span>
+                <div>
+                  <div class="font-weight-medium">
+                    {{ item.currency }} {{ Number(item.total).toFixed(2) }}
+                  </div>
+                  <!-- Mostrar equivalente en PEN si es moneda extranjera -->
+                  <div v-if="item.currency !== 'PEN'"
+                    class="text-caption text-medium-emphasis">
+                    ≈ S/ {{ (Number(item.total) * Number(item.exchange_rate)).toFixed(2) }}
+                  </div>
+                </div>
               </template>
 
               <template #item.status="{ item }">
@@ -271,14 +267,14 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
               </template>
 
               <template #item.actions="{ item }">
-                <v-btn icon="mdi-eye" variant="text" size="small" color="primary"
-                  :href="`/quotes/${item.id}`" />
+                <v-btn icon="mdi-eye" variant="text" size="small"
+                  color="primary" :href="`/quotes/${item.id}`" />
               </template>
             </v-data-table>
           </v-card-text>
         </v-tabs-window-item>
 
-        <!-- ─── Tab 3: Comparativo Automático (Paso 5) ──────── -->
+        <!-- ─── Tab 3: Comparativo en PEN (Paso 5) ───────────── -->
         <v-tabs-window-item value="comparativo">
           <v-card-text>
             <div v-if="quoteTotals.length < 2" class="text-center pa-8">
@@ -291,54 +287,91 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
             <div v-else>
               <v-alert type="info" variant="tonal" density="compact" class="mb-4">
                 Las celdas en <strong class="text-success">verde</strong> muestran el mejor
-                precio por ítem. Seleccione la cotización ganadora para enviar a aprobación.
+                precio por ítem. <strong>Todos los precios están convertidos a S/ PEN</strong>
+                para una comparación justa. Las cotizaciones en moneda extranjera muestran
+                el original debajo.
               </v-alert>
 
-              <!-- Tabla comparativa -->
               <div class="overflow-x-auto">
-                <v-table density="compact" class="comparison-table">
+                <v-table density="compact">
                   <thead>
                     <tr>
                       <th style="min-width:200px">Ítem</th>
-                      <th class="text-center" style="min-width:60px">Cant.</th>
+                      <th class="text-center" style="min-width:70px">Cant.</th>
+                      <!-- Cabecera por proveedor con info de T/C si aplica -->
                       <th v-for="qt in quoteTotals" :key="qt.quote_id"
-                        class="text-center" style="min-width:140px">
+                        class="text-center" style="min-width:160px">
                         <div class="font-weight-bold">{{ qt.supplier_name }}</div>
-                        <div class="text-caption text-medium-emphasis">{{ qt.currency }}</div>
+                        <div v-if="qt.currency === 'PEN'"
+                          class="text-caption text-medium-emphasis">
+                          PEN
+                        </div>
+                        <div v-else class="text-caption">
+                          <v-chip size="x-small" color="warning" label>
+                            {{ qt.currency }} → PEN · T/C {{ qt.exchange_rate }}
+                          </v-chip>
+                        </div>
                       </th>
                     </tr>
                   </thead>
+
                   <tbody>
                     <tr v-for="row in comparisonMatrix" :key="row.id">
                       <td>
                         <div class="text-body-2">{{ row.description }}</div>
                       </td>
                       <td class="text-center text-body-2">
-                        {{ Number(row.quantity).toFixed(2) }}
-                        {{ row.unit?.abbreviation }}
+                        {{ Number(row.quantity).toFixed(2) }} {{ row.unit?.abbreviation }}
                       </td>
                       <td v-for="price in row.prices" :key="price.quote_id"
-                        class="text-center">
-                        <span v-if="price.unit_price !== null"
-                          :class="price.is_best ? 'text-success font-weight-bold' : 'text-body-2'">
-                          <v-icon v-if="price.is_best" size="x-small" color="success">
-                            mdi-check-circle
-                          </v-icon>
-                          {{ Number(price.unit_price).toFixed(2) }}
-                        </span>
+                        class="text-center py-2">
+                        <template v-if="price.unit_price !== null">
+                          <!-- Precio en PEN (ya convertido) -->
+                          <div :class="price.is_best
+                            ? 'text-success font-weight-bold'
+                            : 'text-body-2'">
+                            <v-icon v-if="price.is_best" size="x-small" color="success">
+                              mdi-check-circle
+                            </v-icon>
+                            S/ {{ price.unit_price_pen.toFixed(2) }}
+                          </div>
+                          <!-- Precio original si es moneda extranjera -->
+                          <div v-if="price.currency !== 'PEN'"
+                            class="text-caption text-medium-emphasis">
+                            {{ price.currency }} {{ price.unit_price.toFixed(2) }}
+                            × {{ price.exchange_rate }}
+                          </div>
+                        </template>
                         <span v-else class="text-medium-emphasis">—</span>
                       </td>
                     </tr>
                   </tbody>
+
                   <tfoot>
+                    <!-- Total en PEN -->
                     <tr class="font-weight-bold bg-grey-lighten-4">
                       <td colspan="2" class="text-right pr-4">TOTAL (con IGV):</td>
-                      <td v-for="qt in quoteTotals" :key="qt.quote_id" class="text-center">
-                        <span :class="qt.total === minTotal ? 'text-success font-weight-bold' : ''">
+                      <td v-for="qt in quoteTotals" :key="qt.quote_id"
+                        class="text-center py-2">
+                        <!-- Total en PEN -->
+                        <div :class="qt.total_pen === minTotal
+                          ? 'text-success font-weight-bold text-body-1'
+                          : 'text-body-2'">
+                          <v-icon v-if="qt.total_pen === minTotal"
+                            size="small" color="success">
+                            mdi-trophy
+                          </v-icon>
+                          S/ {{ qt.total_pen.toFixed(2) }}
+                        </div>
+                        <!-- Original si es moneda extranjera -->
+                        <div v-if="qt.currency !== 'PEN'"
+                          class="text-caption text-medium-emphasis">
                           {{ qt.currency }} {{ qt.total.toFixed(2) }}
-                        </span>
+                          × {{ qt.exchange_rate }}
+                        </div>
                       </td>
                     </tr>
+
                     <tr>
                       <td colspan="2" class="text-right pr-4 text-caption">Plazo pago:</td>
                       <td v-for="qt in quoteTotals" :key="qt.quote_id"
@@ -360,6 +393,7 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
                         {{ qt.validity_date ?? '—' }}
                       </td>
                     </tr>
+
                     <!-- Fila de selección -->
                     <tr v-if="qr.status === 'abierta'">
                       <td colspan="2"></td>
@@ -367,11 +401,8 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
                         class="text-center pa-2">
                         <v-btn
                           v-if="qt.status !== 'aprobada' && qt.status !== 'comparada'"
-                          color="primary"
-                          size="small"
-                          variant="tonal"
-                          @click="openConfirmDialog(qt.quote_id)"
-                        >
+                          color="primary" size="small" variant="tonal"
+                          @click="openConfirmDialog(qt.quote_id)">
                           Seleccionar
                         </v-btn>
                         <v-chip v-else color="success" size="small" label>
@@ -388,7 +419,7 @@ const supplierStatusLabels = { pendiente: 'Pendiente', respondido: 'Respondió',
       </v-tabs-window>
     </v-card>
 
-    <!-- Dialog confirmación selección ganador -->
+    <!-- Dialog confirmación -->
     <v-dialog v-model="confirmDialog" max-width="420">
       <v-card rounded="lg">
         <v-card-title class="d-flex align-center pa-4">

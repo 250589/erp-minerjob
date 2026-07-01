@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\RegisterQuoteRequest;
+use App\Models\Approval;
 use App\Models\Quote;
 use App\Models\QuoteComparison;
 use App\Models\QuoteRequest;
@@ -13,7 +14,7 @@ use Inertia\Response;
 
 class QuoteController extends Controller
 {
-    // ─── Formulario para registrar cotización recibida ────────
+    // ─── Formulario para registrar cotización recibida ────────────────────────
 
     public function create(QuoteRequest $quoteRequest): Response
     {
@@ -25,25 +26,23 @@ class QuoteController extends Controller
             'suppliers.supplier:id,business_name,trade_name,tax_id',
         ]);
 
-        // Solo proveedores invitados que aún no han respondido
         $pendingSuppliers = $quoteRequest->suppliers
             ->where('status', 'pendiente')
             ->map(fn ($qrs) => $qrs->supplier);
 
         return Inertia::render('Quotes/Register', [
-            'quoteRequest'    => $quoteRequest,
-            'pendingSuppliers'=> $pendingSuppliers->values(),
+            'quoteRequest'     => $quoteRequest,
+            'pendingSuppliers' => $pendingSuppliers->values(),
         ]);
     }
 
-    // ─── Guardar cotización recibida (paso 4) ─────────────────
+    // ─── Guardar cotización recibida (paso 4) ─────────────────────────────────
 
     public function store(RegisterQuoteRequest $request, QuoteRequest $quoteRequest)
     {
         abort_if($quoteRequest->status !== 'abierta', 403);
 
         DB::transaction(function () use ($request, $quoteRequest) {
-            // Calcular subtotal, IGV y total
             $subtotal = collect($request->items)
                 ->sum(fn ($i) => $i['quantity'] * $i['unit_price']);
             $tax   = round($subtotal * 0.18, 2);
@@ -65,6 +64,12 @@ class QuoteController extends Controller
                 'received_at'        => now(),
             ]);
 
+            // Guardar archivo adjunto (PDF o imagen)
+            if ($request->hasFile('quote_file')) {
+                $path = $request->file('quote_file')->store('quotes', 'public');
+                $quote->update(['file_path' => $path]);
+            }
+
             foreach ($request->items as $item) {
                 $quote->items()->create([
                     'requirement_item_id' => $item['requirement_item_id'] ?? null,
@@ -85,10 +90,7 @@ class QuoteController extends Controller
             ->with('success', 'Cotización registrada exitosamente.');
     }
 
-    // ─── Seleccionar cotización ganadora (pasos 6-8) ──────────
-    // Paso 5 (comparativo) se calcula en el frontend.
-    // Gerencia aprueba en el Módulo 6 (Aprobaciones).
-    // Aquí Compras pre-selecciona la mejor y la envía a aprobación.
+    // ─── Seleccionar ganador → crea Aprobación para Gerencia (pasos 5-6) ─────
 
     public function selectWinner(Request $request, QuoteRequest $quoteRequest)
     {
@@ -97,16 +99,16 @@ class QuoteController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $quoteRequest) {
-            // Rechazar todas las demás
+            // Rechazar todas las demás cotizaciones
             Quote::where('quote_request_id', $quoteRequest->id)
                 ->where('id', '!=', $request->quote_id)
                 ->update(['status' => 'rechazada']);
 
-            // Marcar la seleccionada como "comparada" (esperando aprobación gerencia)
+            // Marcar la seleccionada como "comparada" (esperando aprobación)
             Quote::find($request->quote_id)->update(['status' => 'comparada']);
 
-            // Guardar selección en el comparativo
-            QuoteComparison::updateOrCreate(
+            // Guardar o actualizar el comparativo
+            $comparison = QuoteComparison::updateOrCreate(
                 ['quote_request_id' => $quoteRequest->id],
                 [
                     'selected_quote_id' => $request->quote_id,
@@ -117,9 +119,40 @@ class QuoteController extends Controller
 
             // Cerrar la solicitud de cotización
             $quoteRequest->update(['status' => 'cerrada']);
+
+            // ─── PASO 6: Crear solicitud de APROBACIÓN para Gerencia ─────────
+            // Eliminar aprobaciones anteriores de este mismo comparativo (si había)
+            Approval::where('approvable_type', 'QuoteComparison')
+                ->where('approvable_id', $comparison->id)
+                ->delete();
+
+            Approval::create([
+                'approvable_type' => 'QuoteComparison',
+                'approvable_id'   => $comparison->id,
+                'requested_by'    => auth()->id(),
+                'approver_id'     => null, // Gerencia lo asignará
+                'status'          => 'pendiente',
+            ]);
         });
 
-        return redirect()->route('quote-requests.show', $quoteRequest)
-            ->with('success', 'Cotización seleccionada. Pendiente de aprobación gerencial.');
+        return redirect('/approvals')
+            ->with('success',
+                'Cotización seleccionada. Se creó solicitud de aprobación para Gerencia. (Paso 6)'
+            );
+    }
+
+    // ─── Detalle de cotización ────────────────────────────────────────────────
+
+    public function show(Quote $quote): Response
+    {
+        $quote->load([
+            'supplier:id,business_name,tax_id',
+            'quoteRequest:id,code,requirement_id',
+            'items.product:id,sku,name',
+        ]);
+
+        return Inertia::render('Quotes/Show', [
+            'quote' => $quote,
+        ]);
     }
 }

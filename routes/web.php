@@ -19,6 +19,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\WarehouseController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RucLookupController;
+use App\Http\Controllers\ImportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -26,9 +29,9 @@ Route::get('/', function () {
     return auth()->check() ? redirect('/dashboard') : redirect('/login');
 });
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
 
@@ -129,6 +132,15 @@ Route::middleware('auth')->group(function () {
     // Dentro del grupo middleware('auth'):
     Route::resource('products',   ProductController::class)->except(['show']);
     Route::resource('warehouses', WarehouseController::class)->except(['show']);
+
+    // Consulta RUC (apiperu.dev)
+    Route::post('/ruc-lookup', [RucLookupController::class, 'lookup'])->name('ruc.lookup');
+
+    Route::get('imports/products',          [ImportController::class, 'showProducts'])    ->name('imports.products');
+    Route::post('imports/products',         [ImportController::class, 'importProducts'])  ->name('imports.products.import');
+    Route::get('imports/products/template', [ImportController::class, 'productsTemplate'])->name('imports.products.template');
+    Route::get('quotes/{quote}', [QuoteController::class, 'show'])->name('quotes.show');
+    Route::post('/exchange-rate', [RucLookupController::class, 'exchangeRate'])->name('exchange-rate');
 });
 
 require __DIR__.'/auth.php';

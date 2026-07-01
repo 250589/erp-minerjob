@@ -60,6 +60,10 @@ function deleteProduct(product) {
       <v-btn color="primary" prepend-icon="mdi-plus" href="/products/create">
         Nuevo Producto
       </v-btn>
+      <v-btn variant="tonal" prepend-icon="mdi-file-excel"
+        href="/imports/products" class="mr-2">
+        Importar Excel
+      </v-btn>
     </div>
 
     <!-- Filtros -->

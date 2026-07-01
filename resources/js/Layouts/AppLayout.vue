@@ -136,7 +136,7 @@ function logout() {
             :title="item.title"
             :href="item.href"
             :active="isActive(item.href)"
-            active-color="white"
+            color="white"
             base-color="rgba(255,255,255,0.8)"
             rounded="lg"
             class="mb-1"
